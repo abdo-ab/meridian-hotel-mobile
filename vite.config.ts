@@ -1,5 +1,6 @@
 import inertia from '@inertiajs/vite';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
+import { nativephpMobile, nativephpHotFile } from './vendor/nativephp/mobile/resources/js/vite-plugin.js';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
@@ -11,6 +12,7 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             refresh: true,
+            hotFile: nativephpHotFile(),
             fonts: [
                 bunny('Instrument Sans', {
                     weights: [400, 500, 600],
@@ -27,5 +29,7 @@ export default defineConfig({
         wayfinder({
             formVariants: true,
         }),
+        nativephpMobile(),
+
     ],
 });

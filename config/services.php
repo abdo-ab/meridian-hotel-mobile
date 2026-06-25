@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'rooms' => [
+        'api_url' => env('ROOMS_API_URL'),
+        'image_base_url' => env('ROOMS_IMAGE_BASE_URL'),
+    ],
+
 ];

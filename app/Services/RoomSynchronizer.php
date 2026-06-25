@@ -11,23 +11,21 @@ class RoomSynchronizer
 {
     public static function run(): void
     {
-        // Dynamically  URL and Image Base URL 
-        $serverUrl = env('ROOMS_API_URL');
-        $imageBaseUrl = env('ROOMS_IMAGE_BASE_URL');
+        // Dynamically get URL and Image Base URL from config
+        $apiUrl = config('services.rooms.api_url');
+        $serverUrl = (is_string($apiUrl) && !empty($apiUrl)) ? $apiUrl : "http://127.0.0.1:8000/api/rooms/sync";
 
-        if (!$serverUrl) {
-            $serverUrl = "http://127.0.0.1:8000/api/rooms/sync";
-        }
+        $imgUrl = config('services.rooms.image_base_url');
+        $imageBaseUrl = (is_string($imgUrl) && !empty($imgUrl)) ? $imgUrl : "http://127.0.0.1:8000/storage/";
 
-        if (!$imageBaseUrl) {
-            $imageBaseUrl = "http://127.0.0.1:8000/storage/";
-        }
-
-        //  network check for the dev emulator
+        // Simplified network check for the dev emulator
         try {
-            if (class_exists('Native\Mobile\Facades\Network') && Network::status()->isOffline()) {
-                Log::info('Mobile Sync skipped: Emulator reports offline state.');
-                return;
+            if (class_exists('Native\Mobile\Facades\Network')) {
+                $status = Network::status();
+                if ($status && isset($status->connected) && !$status->connected) {
+                    Log::info('Mobile Sync skipped: Emulator reports offline state.');
+                    return;
+                }
             }
         } catch (\Throwable $th) {
             // Fallback gracefully if facade is still pairing with mobile driver hooks
@@ -36,6 +34,7 @@ class RoomSynchronizer
         try {
             Log::info('Mobile Sync initiating hit to: ' . $serverUrl);
 
+            // Attempt primary request (normally 127.0.0.1)
             $response = null;
             try {
                 $res = Http::timeout(3)->get($serverUrl);
@@ -46,8 +45,7 @@ class RoomSynchronizer
                 Log::warning('Mobile Sync primary host connection failed: ' . $e->getMessage());
             }
 
-
-            // fallback to the emulator host loopback IP.
+            // attempt fallback to the emulator host loopback IP .
             if ((!$response || !$response->successful()) && str_contains($serverUrl, '127.0.0.1') && PHP_OS_FAMILY === 'Linux') {
                 $fallbackUrl = str_replace('127.0.0.1', '10.0.2.2', $serverUrl);
                 Log::info('Mobile Sync attempting fallback to Android emulator host IP: ' . $fallbackUrl);
@@ -69,12 +67,15 @@ class RoomSynchronizer
             }
 
             if ($response->successful()) {
-                $remoteRooms = $response->json('rooms') ?? [];
+                /** @var array<string, mixed> $roomsData */
+                $roomsData = $response->json() ?? [];
+                /** @var array<array<string, mixed>> $remoteRooms */
+                $remoteRooms = $roomsData['rooms'] ?? [];
 
                 Log::info('Mobile Sync successful! Found rooms count: ' . count($remoteRooms));
 
                 foreach ($remoteRooms as $room) {
-                    // Use the API's numeric `id` as the reliable sync key.
+                    //the API's numeric `id` as the reliable sync key.
                     $remoteId = $room['id'] ?? null;
 
                     if (!$remoteId) {
@@ -82,9 +83,9 @@ class RoomSynchronizer
                         continue;
                     }
 
-                    // Build the full image URL
+                    //  the full image URL
                     $imagePath = $room['image'] ?? null;
-                    if ($imagePath) {
+                    if (is_string($imagePath) && !empty($imagePath)) {
                         if (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
                             $fullImageUrl = $imagePath;
                         } else {
@@ -97,10 +98,10 @@ class RoomSynchronizer
                     MobileRoom::updateOrCreate(
                         ['remote_id' => $remoteId],
                         [
-                            'uuid'        => $room['uuid'] ?: null,
-                            'title'       => $room['title'],
-                            'description' => $room['description'],
-                            'price'       => $room['price'],
+                            'uuid'        => ($room['uuid'] ?? null) ?: null,
+                            'title'       => $room['title'] ?? null,
+                            'description' => $room['description'] ?? null,
+                            'price'       => $room['price'] ?? null,
                             'image'       => $fullImageUrl,
                         ]
                     );
